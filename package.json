@@ -3,7 +3,7 @@
     "version": "1.0.0",
     "scripts": {
         "build": "tsc",
-        "start": "live-server"
+        "start": "live-server public"
     },
     "devDependencies": {
         "typescript": "^5.0.0",

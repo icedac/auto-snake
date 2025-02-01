@@ -1,0 +1,197 @@
+<structures>
+└── auto-snake (7 files)
+    ├── .github (1 files)
+    │   └── workflows (1 files)
+    │       └── github-pages.yml (26 lines/1k bytes)
+    ├── .gitignore (6 lines/0k bytes)
+    ├── package.json (14 lines/0k bytes)
+    ├── public (1 files)
+    │   └── index.html (11 lines/0k bytes)
+    ├── snake.txt (1 lines/0k bytes)
+    ├── src (1 files)
+    │   └── game.ts (103 lines/4k bytes)
+    └── tsconfig.json (12 lines/0k bytes)
+</structures>
+
+<file name="/Users/icedac/personal/auto-snake/.github/workflows/github-pages.yml">
+name: GitHub Pages Deploy
+on:
+  push:
+    branches:
+      - main
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+      - name: Install dependencies
+        run: npm install
+      - name: Build project
+        run: npm run build
+      - name: Copy static files
+        run: cp index.html dist/
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+</file>
+<file name="/Users/icedac/personal/auto-snake/.gitignore">
+node_modules/
+dist/
+.venv/
+.parcel-cache/
+pnpm-lock.yaml
+.git/
+</file>
+<file name="/Users/icedac/personal/auto-snake/package.json">
+{
+    "name": "snake-competition",
+    "version": "1.0.0",
+    "scripts": {
+        "build": "tsc",
+        "start": "live-server"
+    },
+    "devDependencies": {
+        "typescript": "^5.0.0",
+        "live-server": "^1.2.1"
+    },
+    "packageManager": "pnpm@9.15.4+sha512.b2dc20e2fc72b3e18848459b37359a32064663e5627a51e4c74b2c29dd8e8e0491483c3abb40789cfd578bf362fb6ba8261b05f0387d76792ed6e23ea3b1b6a0"
+}
+</file>
+<file name="/Users/icedac/personal/auto-snake/public/index.html">
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Autonomous Snake Competition</title>
+</head>
+<body>
+  <script type="module" src="./dist/game.js"></script>
+</body>
+</html>
+</file>
+<file name="/Users/icedac/personal/auto-snake/snake.txt">
+
+</file>
+<file name="/Users/icedac/personal/auto-snake/src/game.ts">
+const canvas = document.createElement("canvas")
+canvas.width = 600
+canvas.height = 600
+document.body.appendChild(canvas)
+const ctx = canvas.getContext("2d")!
+const cellSize = 20, cols = canvas.width / cellSize, rows = canvas.height / cellSize
+type Point = { x: number, y: number }
+enum Direction { Up, Down, Left, Right }
+function pointEqual(a: Point, b: Point): boolean { return a.x === b.x && a.y === b.y }
+function manhattan(a: Point, b: Point): number { return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) }
+class Snake {
+  id: number; body: Point[]; direction: Direction; alive: boolean; color: string
+  constructor(id: number, initPos: Point, color: string) {
+    this.id = id; this.body = [initPos]; this.direction = Math.floor(Math.random() * 4); this.alive = true; this.color = color
+  }
+  get head(): Point { return this.body[0] }
+  getNextHead(dir: Direction): Point {
+    let { x, y } = this.head
+    if (dir === Direction.Up) y--
+    else if (dir === Direction.Down) y++
+    else if (dir === Direction.Left) x--
+    else if (dir === Direction.Right) x++
+    return { x, y }
+  }
+  isSafe(pt: Point, snakes: Snake[]): boolean {
+    if (pt.x < 0 || pt.x >= cols || pt.y < 0 || pt.y >= rows) return false
+    for (let snake of snakes) for (let seg of snake.body) if (pointEqual(pt, seg)) return false
+    return true
+  }
+  decideDirection(foods: Point[], snakes: Snake[]): Direction {
+    const dirs = [Direction.Up, Direction.Down, Direction.Left, Direction.Right]
+    let safeDirs: Direction[] = []
+    for (let d of dirs) { if (this.isSafe(this.getNextHead(d), snakes)) safeDirs.push(d) }
+    if (safeDirs.length === 0) return this.direction
+    let target = foods.length
+      ? foods.reduce((a, b) => manhattan(this.head, a) < manhattan(this.head, b) ? a : b)
+      : { x: Math.floor(cols / 2), y: Math.floor(rows / 2) }
+    let best = safeDirs[0], bestDist = Infinity
+    for (let d of safeDirs) {
+      let next = this.getNextHead(d)
+      let dman = manhattan(next, target)
+      if (dman < bestDist) { bestDist = dman; best = d }
+    }
+    return best
+  }
+  move(newHead: Point, grow: boolean) {
+    this.body.unshift(newHead)
+    if (!grow) this.body.pop()
+  }
+}
+class Game {
+  snakes: Snake[]; foods: Point[]; tickInterval: number
+  constructor() {
+    this.snakes = [
+      new Snake(1, { x: 5, y: 5 }, "red"),
+      new Snake(2, { x: cols - 6, y: 5 }, "blue"),
+      new Snake(3, { x: Math.floor(cols / 2), y: rows - 6 }, "green")
+    ]
+    this.foods = []
+    this.spawnFood()
+    this.tickInterval = 100
+  }
+  spawnFood() {
+    let pt: Point
+    do {
+      pt = { x: Math.floor(Math.random() * cols), y: Math.floor(Math.random() * rows) }
+    } while (this.isOccupied(pt))
+    this.foods.push(pt)
+  }
+  isOccupied(pt: Point): boolean {
+    for (let s of this.snakes) for (let seg of s.body) if (pointEqual(pt, seg)) return true
+    return false
+  }
+  update() {
+    for (let snake of this.snakes.filter(s => s.alive)) {
+      snake.direction = snake.decideDirection(this.foods, this.snakes)
+      let next = snake.getNextHead(snake.direction)
+      let grow = false
+      for (let i = 0; i < this.foods.length; i++) {
+        if (pointEqual(next, this.foods[i])) { grow = true; this.foods.splice(i, 1); this.spawnFood(); break }
+      }
+      if (!snake.isSafe(next, this.snakes)) { snake.alive = false; continue }
+      snake.move(next, grow)
+    }
+  }
+  draw() {
+    ctx.fillStyle = "black"
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    for (let food of this.foods) {
+      ctx.fillStyle = "yellow"
+      ctx.fillRect(food.x * cellSize, food.y * cellSize, cellSize, cellSize)
+    }
+    for (let snake of this.snakes) {
+      if (!snake.alive) continue
+      ctx.fillStyle = snake.color
+      for (let seg of snake.body)
+        ctx.fillRect(seg.x * cellSize, seg.y * cellSize, cellSize, cellSize)
+    }
+  }
+  run() { setInterval(() => { this.update(); this.draw() }, this.tickInterval) }
+}
+new Game().run()
+</file>
+<file name="/Users/icedac/personal/auto-snake/tsconfig.json">
+{
+    "compilerOptions": {
+      "target": "ES6",
+      "module": "ES6",
+      "strict": true,
+      "outDir": "./dist",
+      "rootDir": "./src",
+      "esModuleInterop": true,
+      "lib": ["DOM", "ES6"]
+    }
+  }
+</file>
